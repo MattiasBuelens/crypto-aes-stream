@@ -18,33 +18,46 @@ class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
     }
 
     async transform(chunk: Uint8Array, controller: TransformStreamDefaultController<Uint8Array>) {
-        console.log({chunk: chunk.byteLength});
-        if (this._queueSize + chunk.byteLength < AES_BLOCK_SIZE) {
-            this._queue.push(chunk);
-            this._queueSize += chunk.byteLength;
+        this._queue.push(chunk);
+        this._queueSize += chunk.byteLength;
+
+        // Need at least 1 block to decrypt,
+        // plus 1 block padding to ensure we're not yet at the last block.
+        if (this._queueSize < 2 * AES_BLOCK_SIZE) {
             return;
         }
-        const remainderSize = (this._queueSize + chunk.byteLength) % AES_BLOCK_SIZE;
-        const chunks = this._queue;
-        if (remainderSize === 0) {
-            chunks.push(chunk);
-            this._queue = [];
-            this._queueSize = 0;
-        } else {
-            chunks.push(chunk.subarray(0, chunk.byteLength - remainderSize));
-            this._queue = [chunk.subarray(chunk.byteLength - remainderSize)];
-            this._queueSize = remainderSize;
-        }
-        const data = concatUint8Arrays(chunks);
-        console.log({data: data.byteLength});
-        console.assert(data.byteLength % AES_BLOCK_SIZE === 0);
+
+        let data = concatUint8Arrays(this._queue);
+        this._queue = [];
+        this._queueSize = 0;
+
+        const remainderSize = AES_BLOCK_SIZE + ((data.byteLength - AES_BLOCK_SIZE) % AES_BLOCK_SIZE);
+        const usableSize = data.byteLength - remainderSize;
+        console.assert(usableSize % AES_BLOCK_SIZE === 0);
+
+        // Re-enqueue the remainder
+        const remainder = data.subarray(usableSize);
+        this._queue.push(remainder);
+        this._queueSize += remainderSize;
+        data = data.subarray(0, usableSize);
+        console.assert(data.byteLength === usableSize);
+
+        const nextIv = data.subarray(data.byteLength - AES_BLOCK_SIZE);
+        console.assert(nextIv.byteLength === AES_BLOCK_SIZE);
+
+        const padding = await crypto.subtle.encrypt({
+            name: 'AES-CBC',
+            iv: nextIv
+        }, this._key, new Uint8Array(0));
+        const paddedData = concatUint8Arrays([data, new Uint8Array(padding)]);
 
         const plain = await crypto.subtle.decrypt({
             name: 'AES-CBC',
             iv: this._iv
-        }, this._key, data);
-        this._iv = data.subarray(data.byteLength - AES_BLOCK_SIZE);
-        console.assert(this._iv.byteLength === AES_BLOCK_SIZE);
+        }, this._key, paddedData);
+        console.assert(plain.byteLength === data.byteLength);
+
+        this._iv = nextIv;
 
         controller.enqueue(new Uint8Array(plain));
     }
@@ -53,10 +66,16 @@ class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
         if (this._queueSize === 0) {
             return;
         }
+
         const data = concatUint8Arrays(this._queue);
-        console.log({data: data.byteLength});
-        controller.enqueue(data);
+        const plain = await crypto.subtle.decrypt({
+            name: 'AES-CBC',
+            iv: this._iv
+        }, this._key, data);
+
+        controller.enqueue(new Uint8Array(plain));
         this._queue = [];
+        this._queueSize = 0;
     }
 }
 
