@@ -28,7 +28,9 @@ async function reference(key: CryptoKey, iv: Uint8Array): Promise<Uint8Array> {
 
 async function stream(key: CryptoKey, iv: Uint8Array): Promise<Uint8Array> {
     const cipherStream = (await fetch('example/segment-00000.ts.enc')).body!;
-    const plainStream = cipherStream.pipeThrough(aesCbcDecryptStream(key, iv));
+    const plainStream = cipherStream
+        .pipeThrough(splitChunks(1069))
+        .pipeThrough(aesCbcDecryptStream(key, iv));
     return concatUint8Arrays(await collectStream(plainStream));
 }
 
@@ -43,6 +45,16 @@ async function collectStream<T>(stream: ReadableStream<T>): Promise<T[]> {
         chunks.push(result.value);
     }
     return chunks;
+}
+
+function splitChunks(maxChunkSize: number): TransformStream<Uint8Array, Uint8Array> {
+    return new TransformStream({
+        transform(chunk, controller) {
+            for (let i = 0; i < chunk.byteLength; i += maxChunkSize) {
+                controller.enqueue(chunk.subarray(i, i + maxChunkSize));
+            }
+        }
+    });
 }
 
 function diff(left: Uint8Array, right: Uint8Array): number {
