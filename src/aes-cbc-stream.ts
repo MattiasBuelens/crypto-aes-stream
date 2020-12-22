@@ -9,7 +9,7 @@ const AES_BLOCK_SIZE = 16;
 class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
     private readonly _key: CryptoKey;
     private _iv: Uint8Array;
-    private _queue: Uint8Array[] = [];
+    private readonly _queue: Uint8Array[] = [];
     private _queueSize: number = 0;
 
     constructor(key: CryptoKey, iv: Uint8Array) {
@@ -69,7 +69,7 @@ class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
         }, this._key, data);
 
         controller.enqueue(new Uint8Array(plain));
-        this._queue = [];
+        this._queue.length = 0;
         this._queueSize = 0;
     }
 }
