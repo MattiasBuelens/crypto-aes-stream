@@ -13,6 +13,15 @@ class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
     private _queueSize: number = 0;
 
     constructor(key: CryptoKey, iv: Uint8Array) {
+        if (key.algorithm.name !== 'AES-CBC') {
+            throw new TypeError('Key algorithm must be "AES-CBC"');
+        }
+        if (!key.usages.includes('encrypt') || !key.usages.includes('decrypt')) {
+            throw new TypeError('Key must allow both encryption and decryption');
+        }
+        if (iv.byteLength !== AES_BLOCK_SIZE) {
+            throw new TypeError(`Initialization vector must be ${AES_BLOCK_SIZE} bytes long`);
+        }
         this._key = key;
         this._iv = iv;
     }
