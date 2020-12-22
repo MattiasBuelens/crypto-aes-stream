@@ -3,9 +3,7 @@ import {concatUint8Arrays} from './util.js';
 
 async function main() {
     const rawKey = await (await fetch('example/segment-00000.key')).arrayBuffer();
-    const key = await crypto.subtle.importKey('raw', rawKey, {
-        name: 'AES-CBC',
-    }, false, ['encrypt', 'decrypt']);
+    const key = await crypto.subtle.importKey('raw', rawKey, {name: 'AES-CBC'}, false, ['encrypt', 'decrypt']);
 
     const iv = new Uint8Array(16);
     iv[15] = 1;
@@ -19,10 +17,7 @@ async function reference(key: CryptoKey, iv: Uint8Array): Promise<Uint8Array> {
     const data = await (await fetch('example/segment-00000.ts.enc')).arrayBuffer();
     // console.log({data: new Uint8Array(data)});
 
-    return new Uint8Array(await crypto.subtle.decrypt({
-        name: 'AES-CBC',
-        iv
-    }, key, data));
+    return new Uint8Array(await crypto.subtle.decrypt({name: 'AES-CBC', iv}, key, data));
 }
 
 async function stream(key: CryptoKey, iv: Uint8Array): Promise<Uint8Array> {
