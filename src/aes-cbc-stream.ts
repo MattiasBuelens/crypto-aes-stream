@@ -1,4 +1,4 @@
-import {concatUint8Arrays, takeBytesFromQueue} from './util.js';
+import {concatUint8ArraysWithSize, takeBytesFromQueue} from './util.js';
 
 export default function aesCbcDecryptStream(key: CryptoKey, iv: Uint8Array): TransformStream<Uint8Array, Uint8Array> {
     return new TransformStream<Uint8Array, Uint8Array>(new AesCbcStreamTransformer(key, iv));
@@ -48,7 +48,10 @@ class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
 
         // Decrypt the data, with the new padding block.
         // Since the plaintext of the padding block is empty, no extra unwanted data will end up in the decrypted result.
-        const paddedData = concatUint8Arrays([data, new Uint8Array(padding)]);
+        const paddedData = concatUint8ArraysWithSize(
+            [data, new Uint8Array(padding)],
+            data.byteLength + padding.byteLength
+        );
         const plain = await crypto.subtle.decrypt({
             name: 'AES-CBC',
             iv: this._iv
@@ -70,7 +73,7 @@ class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
         }
 
         // Decrypt all remaining data, which must contain proper padding.
-        const data = concatUint8Arrays(this._queue);
+        const data = concatUint8ArraysWithSize(this._queue, this._queueSize);
         const plain = await crypto.subtle.decrypt({
             name: 'AES-CBC',
             iv: this._iv
