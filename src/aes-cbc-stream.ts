@@ -1,4 +1,4 @@
-import {concatUint8Arrays} from './util.js';
+import {concatUint8Arrays, takeBytesFromQueue} from './util.js';
 
 export default function aesCbcDecryptStream(key: CryptoKey, iv: Uint8Array): TransformStream<Uint8Array, Uint8Array> {
     return new TransformStream<Uint8Array, Uint8Array>(new AesCbcStreamTransformer(key, iv));
@@ -27,19 +27,14 @@ class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
             return;
         }
 
-        let data = concatUint8Arrays(this._queue);
-        this._queue = [];
-        this._queueSize = 0;
-
-        const remainderSize = AES_BLOCK_SIZE + ((data.byteLength - AES_BLOCK_SIZE) % AES_BLOCK_SIZE);
-        const usableSize = data.byteLength - remainderSize;
+        const queueSize = this._queueSize;
+        const remainderSize = AES_BLOCK_SIZE + ((queueSize - AES_BLOCK_SIZE) % AES_BLOCK_SIZE);
+        const usableSize = queueSize - remainderSize;
         console.assert(usableSize % AES_BLOCK_SIZE === 0);
 
-        // Re-enqueue the remainder
-        const remainder = data.subarray(usableSize);
-        this._queue.push(remainder);
-        this._queueSize += remainderSize;
-        data = data.subarray(0, usableSize);
+        // Take usable bytes from queue
+        const data = takeBytesFromQueue(this._queue, usableSize);
+        this._queueSize = remainderSize;
         console.assert(data.byteLength === usableSize);
 
         const nextIv = data.subarray(data.byteLength - AES_BLOCK_SIZE);
@@ -78,4 +73,3 @@ class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
         this._queueSize = 0;
     }
 }
-
