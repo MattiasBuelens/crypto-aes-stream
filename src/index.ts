@@ -5,7 +5,6 @@ async function main() {
     const rawKey = await (await fetch('example/segment-00000.key')).arrayBuffer();
     const key = await crypto.subtle.importKey('raw', rawKey, {
         name: 'AES-CBC',
-        length: 128
     }, false, ['encrypt', 'decrypt']);
 
     const iv = new Uint8Array(16);
