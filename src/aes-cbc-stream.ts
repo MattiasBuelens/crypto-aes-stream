@@ -4,7 +4,17 @@ export default function aesCbcDecryptStream(key: CryptoKey, iv: Uint8Array): Tra
     return new TransformStream<Uint8Array, Uint8Array>(new AesCbcStreamTransformer(key, iv));
 }
 
+/**
+ * The size of an AES block.
+ */
 const AES_BLOCK_SIZE = 16;
+
+/**
+ * The size of the padding.
+ * - Must be smaller than AES_BLOCK_SIZE, otherwise the encrypted padding will be longer than one block.
+ * - Must not be 0, otherwise Edge Legacy will throw an error.
+ */
+const AES_PADDING_SIZE = 1;
 
 class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
     private readonly _key: CryptoKey;
@@ -48,30 +58,34 @@ class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
         takeBytesFromQueue(paddedData, this._queue, usableSize);
         this._queueSize = remainderSize;
 
-        // Encrypt a new empty block, to act as padding.
+        // Encrypt a new block, to act as padding.
         // In CBC, the IV to encrypt or decrypt each block is the ciphertext from the previous block.
         const nextIv = paddedData.slice(usableSize - AES_BLOCK_SIZE, usableSize);
         console.assert(nextIv.byteLength === AES_BLOCK_SIZE);
         const padding = await crypto.subtle.encrypt({
             name: 'AES-CBC',
             iv: nextIv
-        }, this._key, new Uint8Array(0));
+        }, this._key, new Uint8Array(AES_PADDING_SIZE));
+        console.assert(padding.byteLength === AES_BLOCK_SIZE);
+
         // Insert the encrypted padding block after the actual data.
         paddedData.set(new Uint8Array(padding), usableSize);
 
         // Decrypt the data, with the new padding block.
-        // Since the plaintext of the padding block is empty, no extra unwanted data will end up in the decrypted result.
-        const plain = await crypto.subtle.decrypt({
+        const paddedPlain = await crypto.subtle.decrypt({
             name: 'AES-CBC',
             iv: this._iv
         }, this._key, paddedData);
-        console.assert(plain.byteLength === usableSize);
+        console.assert(paddedPlain.byteLength === usableSize + AES_PADDING_SIZE);
 
         // Update the IV for the next block.
         // Note that this is the same IV that we used to encrypt the padding block.
         this._iv = nextIv;
 
-        controller.enqueue(new Uint8Array(plain));
+        // Remove unwanted padding from the decrypted result.
+        const plain = new Uint8Array(paddedPlain, 0, usableSize);
+
+        controller.enqueue(plain);
     }
 
     async flush(controller: TransformStreamDefaultController<Uint8Array>) {
