@@ -41,31 +41,31 @@ class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
         const usableSize = queueSize - remainderSize;
         console.assert(usableSize % AES_BLOCK_SIZE === 0);
 
+        // Allocate a buffer to hold the data to decrypt, followed by a padding block.
+        const paddedData = new Uint8Array(usableSize + AES_BLOCK_SIZE);
+
         // Take usable bytes from the queue.
-        const data = takeBytesFromQueue(this._queue, usableSize);
+        takeBytesFromQueue(paddedData, this._queue, usableSize);
         this._queueSize = remainderSize;
-        console.assert(data.byteLength === usableSize);
 
         // Encrypt a new empty block, to act as padding.
         // In CBC, the IV to encrypt or decrypt each block is the ciphertext from the previous block.
-        const nextIv = data.subarray(data.byteLength - AES_BLOCK_SIZE);
+        const nextIv = paddedData.subarray(usableSize - AES_BLOCK_SIZE, usableSize);
         console.assert(nextIv.byteLength === AES_BLOCK_SIZE);
         const padding = await crypto.subtle.encrypt({
             name: 'AES-CBC',
             iv: nextIv
         }, this._key, new Uint8Array(0));
+        // Insert the encrypted padding block after the actual data.
+        paddedData.set(new Uint8Array(padding), usableSize);
 
         // Decrypt the data, with the new padding block.
         // Since the plaintext of the padding block is empty, no extra unwanted data will end up in the decrypted result.
-        const paddedData = concatUint8ArraysWithSize(
-            [data, new Uint8Array(padding)],
-            data.byteLength + padding.byteLength
-        );
         const plain = await crypto.subtle.decrypt({
             name: 'AES-CBC',
             iv: this._iv
         }, this._key, paddedData);
-        console.assert(plain.byteLength === data.byteLength);
+        console.assert(plain.byteLength === usableSize);
 
         // Update the IV for the next block.
         // Note that this is the same IV that we used to encrypt the padding block.

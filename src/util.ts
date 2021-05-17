@@ -25,18 +25,18 @@ export function concatUint8ArraysWithSize(arrays: readonly Uint8Array[], size: n
 }
 
 /**
- * Take exactly `amount` of bytes from the given chunks, and return it as a single `Uint8Array`.
+ * Take exactly `amount` of bytes from the given list of chunks, and put them in `result`.
  *
  * All fully copied chunks will be removed from `arrays`, and any partially copied chunk will be replaced by
  * a remainder chunk in `arrays`.
  *
- * The total byte size of `arrays` *must* be at least `amount`.
+ * Both the size of `result` and the total byte size of `arrays` *must* be at least `amount`.
  *
+ * @param result The output array to fill.
  * @param arrays A *mutable* array of chunks.
  * @param amount The amount of bytes to take.
  */
-export function takeBytesFromQueue(arrays: Uint8Array[], amount: number): Uint8Array {
-    const result = new Uint8Array(amount);
+export function takeBytesFromQueue(result: Uint8Array, arrays: Uint8Array[], amount: number): void {
     let i = 0;
     let offset = 0;
     // Concatenate complete chunks
@@ -53,5 +53,4 @@ export function takeBytesFromQueue(arrays: Uint8Array[], amount: number): Uint8A
     }
     // Remove complete chunks from queue
     arrays.splice(0, i);
-    return result;
 }
