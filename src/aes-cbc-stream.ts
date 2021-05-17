@@ -50,7 +50,7 @@ class AesCbcStreamTransformer implements Transformer<Uint8Array, Uint8Array> {
 
         // Encrypt a new empty block, to act as padding.
         // In CBC, the IV to encrypt or decrypt each block is the ciphertext from the previous block.
-        const nextIv = paddedData.subarray(usableSize - AES_BLOCK_SIZE, usableSize);
+        const nextIv = paddedData.slice(usableSize - AES_BLOCK_SIZE, usableSize);
         console.assert(nextIv.byteLength === AES_BLOCK_SIZE);
         const padding = await crypto.subtle.encrypt({
             name: 'AES-CBC',
