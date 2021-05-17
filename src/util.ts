@@ -4,7 +4,10 @@
  * @param arrays An array of chunks.
  */
 export function concatUint8Arrays(arrays: readonly Uint8Array[]): Uint8Array {
-    const size = arrays.reduce((sum, array) => sum + array.byteLength, 0);
+    let size = 0;
+    for (const array of arrays) {
+        size += array.byteLength;
+    }
     return concatUint8ArraysWithSize(arrays, size);
 }
 
@@ -17,7 +20,7 @@ export function concatUint8Arrays(arrays: readonly Uint8Array[]): Uint8Array {
 export function concatUint8ArraysWithSize(arrays: readonly Uint8Array[], size: number): Uint8Array {
     const result = new Uint8Array(size);
     let offset = 0;
-    for (let array of arrays) {
+    for (const array of arrays) {
         result.set(array, offset);
         offset += array.byteLength;
     }
